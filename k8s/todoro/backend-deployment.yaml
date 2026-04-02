@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: todoro
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/mattoyuzuru/todoro/backend:edge
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: todoro-secrets
+                  key: database-url
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: todoro-secrets
+                  key: secret-key
+            - name: ALGORITHM
+              value: HS256
+            - name: ACCESS_TOKEN_EXPIRE_MINUTES
+              valueFrom:
+                secretKeyRef:
+                  name: todoro-secrets
+                  key: access-token-expire-minutes
+            - name: TIME_ZONE
+              valueFrom:
+                secretKeyRef:
+                  name: todoro-secrets
+                  key: time-zone
+            - name: CORS_ORIGINS
+              valueFrom:
+                secretKeyRef:
+                  name: todoro-secrets
+                  key: cors-origins
+            - name: REDIS_HOST
+              value: redis
+            - name: REDIS_PORT
+              value: "6379"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 15

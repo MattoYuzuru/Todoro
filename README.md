@@ -94,6 +94,21 @@ docker compose exec -T frontend npm run build
 docker compose down
 ```
 
+## Deploy на VPS через GHCR и k3s
+
+В репозитории добавлены:
+
+- workflow публикации образов в GHCR: `.github/workflows/ci-cd.yml`
+- Kubernetes-манифесты: `k8s/todoro/`
+- bootstrap-скрипт ручного rollout: `scripts/deploy/todoro-bootstrap-k8s.sh`
+
+Продовая схема рассчитана на:
+
+- `https://todo.keykomi.com` — frontend
+- `https://api.todo.keykomi.com` — backend API
+
+Подробные шаги по VPS-сценарию лежат в [docs/deploy.md](/home/mattoyudzuru/PycharmProjects/todo_fastapi/docs/deploy.md).
+
 ## Важно
 
 - `.env` и `.env_db` не должны попадать в Git.
