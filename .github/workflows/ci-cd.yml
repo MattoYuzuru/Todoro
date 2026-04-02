@@ -37,6 +37,11 @@ jobs:
       - name: Install frontend dependencies
         run: npm --prefix frontend ci
 
+      - name: Prepare CI env files
+        run: |
+          cp .env.example .env
+          cp .env_db.example .env_db
+
       - name: Run backend tests
         run: pytest -q backend/tests
 
