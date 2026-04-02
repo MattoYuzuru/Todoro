@@ -1,47 +1,48 @@
-import Vue from "vue";
-import Vuex from "vuex";
-import axios from "axios";
+import { computed, ref } from "vue";
+import { defineStore } from "pinia";
 
-Vue.use(Vuex);
+import api from "../api/client";
 
-export default new Vuex.Store({
-    state: {
-        user: null,
-    },
-    getters: {
-        getUser: (state) => state.user,
-        isAuthenticated: (state) => !!state.user,
-    },
-    mutations: {
-        setUser(state, user) {
-            state.user = user;
-        },
-        clearUser(state) {
-            state.user = null;
-        }
-    },
-    actions: {
-        async fetchUser({commit}) {
-            const token = localStorage.getItem("token");
-            if (!token) {
-                commit("clearUser");
-                return;
-            }
+export const useAuthStore = defineStore("auth", () => {
+  const user = ref(null);
+  const token = ref(localStorage.getItem("token"));
 
-            try {
-                const response = await axios.get("http://localhost:8000/users/me/", {
-                    headers: {Authorization: `Bearer ${token}`}
-                });
-                commit("setUser", response.data);
-            } catch (error) {
-                console.error("Error fetching user:", error);
-                commit("clearUser");
-                localStorage.removeItem("token");
-            }
-        },
-        logout({commit}) {
-            localStorage.removeItem("token");
-            commit("clearUser");
-        }
+  const isAuthenticated = computed(() => Boolean(token.value));
+
+  async function fetchUser() {
+    if (!token.value) {
+      user.value = null;
+      return null;
     }
+
+    try {
+      const response = await api.get("/users/me/");
+      user.value = response.data;
+      return user.value;
+    } catch (error) {
+      console.error("Не удалось получить профиль пользователя:", error);
+      logout();
+      return null;
+    }
+  }
+
+  function setToken(value) {
+    token.value = value;
+    localStorage.setItem("token", value);
+  }
+
+  function logout() {
+    token.value = null;
+    user.value = null;
+    localStorage.removeItem("token");
+  }
+
+  return {
+    fetchUser,
+    isAuthenticated,
+    logout,
+    setToken,
+    token,
+    user,
+  };
 });

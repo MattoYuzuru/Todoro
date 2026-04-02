@@ -1,13 +1,12 @@
-import Vue from "vue";
-import Vuex from "vuex";
-import store from "./store";
+import { createApp } from "vue";
+import { createPinia } from "pinia";
+
 import App from "./App.vue";
 import router from "./router";
+import "./assets/custom.css";
 
-Vue.use(Vuex);
+const app = createApp(App);
 
-new Vue({
-    router,
-    store,
-    render: (h) => h(App),
-}).$mount("#app");
+app.use(createPinia());
+app.use(router);
+app.mount("#app");

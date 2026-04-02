@@ -5,15 +5,15 @@
       <form @submit.prevent="register">
         <div class="form-group">
           <label for="username">Username</label>
-          <input type="text" id="username" v-model="username" class="form-control" required/>
+          <input id="username" v-model="username" type="text" class="form-control" required>
         </div>
         <div class="form-group">
           <label for="email">Email</label>
-          <input type="email" id="email" v-model="email" class="form-control" required/>
+          <input id="email" v-model="email" type="email" class="form-control" required>
         </div>
         <div class="form-group">
           <label for="password">Password</label>
-          <input type="password" id="password" v-model="password" class="form-control" required/>
+          <input id="password" v-model="password" type="password" class="form-control" required>
         </div>
         <button type="submit" class="btn btn-primary">Register</button>
       </form>
@@ -22,45 +22,36 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup>
+import { ref } from "vue";
+import { useRouter } from "vue-router";
 
-export default {
-  name: 'UserRegister',
-  data() {
-    return {
-      username: '',
-      email: '',
-      password: '',
-      errorMessage: ''
-    };
-  },
-  methods: {
-    async register() {
-      try {
-        const response = await axios.post('http://localhost:8000/create', {
-          username: this.username,
-          email: this.email,
-          password: this.password
-        }, {
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        console.log(response.data);
-        this.$router.push('/login');
-      } catch (error) {
-        this.errorMessage = "Registration failed. Please check your details.";
-      }
-    }
+import api from "../api/client";
+
+const router = useRouter();
+
+const username = ref("");
+const email = ref("");
+const password = ref("");
+const errorMessage = ref("");
+
+async function register() {
+  try {
+    await api.post("/create", {
+      username: username.value,
+      email: email.value,
+      password: password.value,
+    });
+    await router.push({ name: "login" });
+  } catch (error) {
+    errorMessage.value = error.response?.data?.detail ?? "Registration failed. Please check your details.";
   }
-};
+}
 </script>
 
 <style scoped>
-
 * {
-    font-family: Andale Mono, monospace;
+  font-family: Andale Mono, monospace;
 }
 
 .register-container {
@@ -134,4 +125,3 @@ input:focus {
   font-weight: 500;
 }
 </style>
-

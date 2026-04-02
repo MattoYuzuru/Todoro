@@ -1,197 +1,232 @@
 <template>
   <div class="todo-details">
-    <h2>{{ todo.title }}</h2>
-    <h4>{{ todo.description }}</h4>
+    <template v-if="todo">
+      <h2>{{ todo.title }}</h2>
+      <h4>{{ todo.description }}</h4>
 
-    <div class="todo-info">
-      <p><strong>Status:</strong> {{ todo.status }}</p>
-      <p><strong>Priority:</strong> {{ todo.priority }}</p>
-      <br>
-      <p v-if="todo.due_date"><strong>Due Date:</strong> {{ todo.due_date }}</p>
-      <p v-if="todo.completed_at"><strong>Completed At:</strong> {{ formattedCompletedAt }}</p>
-      <br>
-      <p><strong>Pomodoro Sessions:</strong> {{ todo.pomodoro_sessions }}</p>
-      <p><strong>Total Time Spent:</strong> {{ formattedTotalTime }}</p>
-      <p><strong>Current Streak:</strong> {{ todo.current_streak }} days</p>
-    </div>
+      <div class="todo-info">
+        <p><strong>Status:</strong> {{ todo.status }}</p>
+        <p><strong>Priority:</strong> {{ todo.priority || "Not set" }}</p>
+        <br>
+        <p v-if="todo.due_date"><strong>Due Date:</strong> {{ todo.due_date }}</p>
+        <p v-if="todo.completed_at"><strong>Completed At:</strong> {{ formattedCompletedAt }}</p>
+        <br>
+        <p><strong>Pomodoro Sessions:</strong> {{ todo.pomodoro_sessions }}</p>
+        <p><strong>Total Time Spent:</strong> {{ formattedTotalTime }}</p>
+        <p><strong>Current Streak:</strong> {{ todo.current_streak }} days</p>
+      </div>
 
-    <div class="timer">
-      <h3>🍅 Pomodoro Timer</h3>
-      <p class="timer-display">{{ formattedTime }}</p>
-      <button @click="startPomodoro" :disabled="isRunning" class="start-btn">Start</button>
-      <button @click="pausePomodoro" :disabled="!isRunning" class="pause-btn">Pause</button>
-      <button @click="finishPomodoro" :disabled="!isRunning" class="finish-btn">Finish</button>
-    </div>
+      <div class="timer">
+        <h3>Pomodoro Timer</h3>
+        <p class="timer-display">{{ formattedTime }}</p>
+        <button @click="startPomodoro" :disabled="isRunning" class="start-btn">Start</button>
+        <button @click="pausePomodoro" :disabled="!isRunning" class="pause-btn">Pause</button>
+        <button @click="finishPomodoro" :disabled="!isRunning" class="finish-btn">Finish</button>
+      </div>
 
-    <button v-if="todo.status !== 'Completed'" @click="markCompleted">Mark as Completed</button>
-    <button @click="deleteTodo">Delete</button>
-    <div class="navigation-buttons">
-      <router-link to="/">
-        <button class="all-button">Go back to Menu</button>
-      </router-link>
-      <router-link to="/todos/all/">
-        <button class="all-button">Go back to Todos</button>
-      </router-link>
-    </div>
+      <button v-if="todo.status !== 'Completed'" @click="markCompleted">Mark as Completed</button>
+      <button @click="deleteTodo">Delete</button>
+      <div class="navigation-buttons">
+        <router-link :to="{ name: 'home' }">
+          <button class="all-button">Go back to Menu</button>
+        </router-link>
+        <router-link :to="{ name: 'todo-list' }">
+          <button class="all-button">Go back to Todos</button>
+        </router-link>
+      </div>
+    </template>
+
+    <p v-else>Loading task...</p>
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup>
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
-export default {
-  props: ['id'],
-  data() {
-    return {
-      todo: {},
-      timeInSeconds: 0,
-      isRunning: false,
-      timerInterval: null,
-      redisFetchInterval: null,
-      startTime: null,
-      accumulatedTime: 0,
-    };
-  },
-  computed: {
-    authToken() {
-      return localStorage.getItem('token');
-    },
-    formattedTime() {
-      const minutes = Math.floor(this.timeInSeconds / 60);
-      const seconds = this.timeInSeconds % 60;
-      return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-    },
-    formattedTotalTime() {
-      if (!this.todo.total_time_spent) return "0:00";
-      const minutes = Math.floor(this.todo.total_time_spent / 60);
-      const seconds = this.todo.total_time_spent % 60;
-      return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-    },
-    formattedCompletedAt() {
-      return this.todo.completed_at ? this.todo.completed_at.split("T")[0] : "N/A";
-    }
-  },
-  async mounted() {
-    if (!this.authToken) {
-      this.$router.push('/login');
-      return;
-    }
-    window.addEventListener("beforeunload", this.confirmReload);
-    await this.fetchTodo();
-    this.fetchPomodoroTime();
-    this.redisFetchInterval = setInterval(this.fetchPomodoroTime, 30000);
-  },
-  beforeUnmount() {
-    window.removeEventListener("beforeunload", this.confirmReload);
-    clearInterval(this.timerInterval);
-    clearInterval(this.redisFetchInterval);
-  },
-  methods: {
-    async fetchTodo() {
-      try {
-        const response = await axios.get(`http://localhost:8000/todos/${this.id}`, {
-          headers: {Authorization: `Bearer ${this.authToken}`}
-        });
-        this.todo = response.data;
-      } catch (error) {
-        console.error("Error fetching todo:", error);
-      }
-    },
-    async deleteTodo() {
-      try {
-        await axios.delete(`http://localhost:8000/todos/${this.id}`, {
-          headers: {Authorization: `Bearer ${this.authToken}`}
-        });
-        this.$router.push('/');
-      } catch (error) {
-        console.error("Error deleting todo:", error);
-      }
-    },
-    async markCompleted() {
-      try {
-        await axios.post(`http://localhost:8000/todos/${this.id}/complete`, {}, {
-          headers: {Authorization: `Bearer ${this.authToken}`}
-        });
-        await this.fetchTodo();
-      } catch (error) {
-        console.error("Error marking todo as completed:", error);
-      }
-    },
-    confirmReload(event) {
-      event.preventDefault();
-      event.returnValue = "Do you want to reload the page? Changes you made may not be saved.";
-    },
-    async fetchPomodoroTime() {
-      try {
-        const response = await axios.get(`http://localhost:8000/todos/${this.id}/pomodoro/status`, {
-          headers: {Authorization: `Bearer ${this.authToken}`}
-        });
-        this.timeInSeconds = response.data.elapsed_time;
-        this.isRunning = response.data.is_running;
-        this.accumulatedTime = Math.round(response.data.accumulated_time) || 0;
-        if (this.isRunning) {
-          this.startLocalTimer();
-        } else {
-          clearInterval(this.timerInterval);
-        }
-      } catch (error) {
-        console.error("Error fetching Pomodoro time:", error);
-      }
-    },
-    async startPomodoro() {
-      try {
-        const response = await axios.post(`http://localhost:8000/todos/${this.id}/pomodoro/start`, {}, {
-          headers: {Authorization: `Bearer ${this.authToken}`}
-        });
-        this.isRunning = true;
-        this.startTime = new Date(response.data.start_time);
-        this.accumulatedTime = Math.round(response.data.accumulated_time) || 0;
-        this.startLocalTimer();
-      } catch (error) {
-        console.error("Error starting pomodoro:", error);
-      }
-    },
-    async pausePomodoro() {
-      try {
-        await axios.post(`http://localhost:8000/todos/${this.id}/pomodoro/pause`, {}, {
-          headers: {Authorization: `Bearer ${this.authToken}`}
-        });
-        this.isRunning = false;
-        clearInterval(this.timerInterval);
-        const elapsedTime = (new Date() - this.startTime) / 1000;
-        this.accumulatedTime += Math.round(elapsedTime);
-        this.timeInSeconds = this.accumulatedTime;
-        await this.fetchTodo();
-      } catch (error) {
-        console.error("Error pausing pomodoro:", error);
-      }
-    },
-    async finishPomodoro() {
-      try {
-        const response = await axios.post(`http://localhost:8000/todos/${this.id}/pomodoro/finish`, {}, {
-          headers: {Authorization: `Bearer ${this.authToken}`}
-        });
-        this.isRunning = false;
-        clearInterval(this.timerInterval);
-        this.timeInSeconds = 0;
-        this.todo.total_time_spent += Math.round(response.data.elapsed_time);
-        this.todo.pomodoro_sessions += 1;
-        await this.fetchTodo();
-      } catch (error) {
-        console.error("Error finishing pomodoro:", error);
-      }
-    },
-    startLocalTimer() {
-      clearInterval(this.timerInterval);
-      this.timerInterval = setInterval(() => {
-        this.timeInSeconds = Math.round(this.accumulatedTime) + Math.floor((new Date() - this.startTime) / 1000);
-        if (this.timeInSeconds >= 1500) {
-          this.finishPomodoro();
-        }
-      }, 1000);
-    },
+import api from "../api/client";
+import { useAuthStore } from "../store";
+
+const authStore = useAuthStore();
+const route = useRoute();
+const router = useRouter();
+
+const todo = ref(null);
+const timeInSeconds = ref(0);
+const isRunning = ref(false);
+const accumulatedTime = ref(0);
+const startTime = ref(null);
+
+let timerInterval = null;
+let statusSyncInterval = null;
+
+const todoId = computed(() => route.params.id);
+const formattedTime = computed(() => {
+  const minutes = Math.floor(timeInSeconds.value / 60);
+  const seconds = timeInSeconds.value % 60;
+  return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
+});
+
+const formattedTotalTime = computed(() => {
+  const total = todo.value?.total_time_spent ?? 0;
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
+});
+
+const formattedCompletedAt = computed(() => {
+  return todo.value?.completed_at ? todo.value.completed_at.split("T")[0] : "N/A";
+});
+
+function clearTimers() {
+  if (timerInterval) {
+    window.clearInterval(timerInterval);
+    timerInterval = null;
   }
-};
+  if (statusSyncInterval) {
+    window.clearInterval(statusSyncInterval);
+    statusSyncInterval = null;
+  }
+}
+
+function startLocalTimer() {
+  if (!startTime.value) {
+    startTime.value = new Date(Date.now() - accumulatedTime.value * 1000);
+  }
+
+  if (timerInterval) {
+    window.clearInterval(timerInterval);
+  }
+
+  timerInterval = window.setInterval(() => {
+    const elapsed = Math.floor((Date.now() - startTime.value.getTime()) / 1000);
+    timeInSeconds.value = accumulatedTime.value + elapsed;
+    if (timeInSeconds.value >= 1500) {
+      finishPomodoro();
+    }
+  }, 1000);
+}
+
+async function ensureAuth() {
+  if (!authStore.isAuthenticated) {
+    await authStore.fetchUser();
+  }
+  if (!authStore.isAuthenticated) {
+    await router.push({ name: "login" });
+    return false;
+  }
+  return true;
+}
+
+async function fetchTodo() {
+  try {
+    const response = await api.get(`/todos/${todoId.value}`);
+    todo.value = response.data;
+  } catch (error) {
+    console.error("Не удалось загрузить задачу:", error);
+  }
+}
+
+async function fetchPomodoroTime() {
+  try {
+    const response = await api.get(`/todos/${todoId.value}/pomodoro/status`);
+    timeInSeconds.value = response.data.elapsed_time;
+    isRunning.value = response.data.is_running;
+    accumulatedTime.value = response.data.accumulated_time ?? 0;
+    startTime.value = response.data.started_at ? new Date(response.data.started_at) : null;
+
+    if (isRunning.value) {
+      startLocalTimer();
+    } else if (timerInterval) {
+      window.clearInterval(timerInterval);
+      timerInterval = null;
+    }
+  } catch (error) {
+    console.error("Не удалось получить состояние помидора:", error);
+  }
+}
+
+async function deleteTodo() {
+  try {
+    await api.delete(`/todos/${todoId.value}`);
+    await router.push({ name: "todo-list" });
+  } catch (error) {
+    console.error("Не удалось удалить задачу:", error);
+  }
+}
+
+async function markCompleted() {
+  try {
+    await api.post(`/todos/${todoId.value}/complete`);
+    await authStore.fetchUser();
+    await fetchTodo();
+  } catch (error) {
+    console.error("Не удалось завершить задачу:", error);
+  }
+}
+
+async function startPomodoro() {
+  try {
+    const response = await api.post(`/todos/${todoId.value}/pomodoro/start`);
+    isRunning.value = true;
+    startTime.value = new Date(response.data.start_time);
+    accumulatedTime.value = response.data.accumulated_time ?? 0;
+    timeInSeconds.value = accumulatedTime.value;
+    startLocalTimer();
+  } catch (error) {
+    console.error("Не удалось запустить помидор:", error);
+  }
+}
+
+async function pausePomodoro() {
+  try {
+    const response = await api.post(`/todos/${todoId.value}/pomodoro/pause`);
+    isRunning.value = false;
+    accumulatedTime.value = response.data.elapsed_time;
+    timeInSeconds.value = response.data.elapsed_time;
+    startTime.value = null;
+    if (timerInterval) {
+      window.clearInterval(timerInterval);
+      timerInterval = null;
+    }
+    await fetchTodo();
+  } catch (error) {
+    console.error("Не удалось поставить помидор на паузу:", error);
+  }
+}
+
+async function finishPomodoro() {
+  try {
+    await api.post(`/todos/${todoId.value}/pomodoro/finish`);
+    isRunning.value = false;
+    accumulatedTime.value = 0;
+    timeInSeconds.value = 0;
+    startTime.value = null;
+    if (timerInterval) {
+      window.clearInterval(timerInterval);
+      timerInterval = null;
+    }
+    await authStore.fetchUser();
+    await fetchTodo();
+  } catch (error) {
+    console.error("Не удалось завершить помидор:", error);
+  }
+}
+
+onMounted(async () => {
+  const canContinue = await ensureAuth();
+  if (!canContinue) {
+    return;
+  }
+
+  await fetchTodo();
+  await fetchPomodoroTime();
+  statusSyncInterval = window.setInterval(fetchPomodoroTime, 30000);
+});
+
+onBeforeUnmount(() => {
+  clearTimers();
+});
 </script>
 
 <style scoped>
@@ -285,6 +320,7 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   margin-top: 20px;
+  gap: 12px;
 }
 
 .all-button {

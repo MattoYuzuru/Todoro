@@ -1,52 +1,49 @@
 <template>
   <div class="container">
     <nav class="nav-bar">
-      <router-link to="/">Home</router-link>
-      <router-link to="/todos/all">All Todos</router-link>
-      <router-link to="/todos/create">Create Todo</router-link>
-      <router-link v-if="!isAuthenticated" to="/login">Login</router-link>
-      <router-link v-if="!isAuthenticated" to="/register">Register</router-link>
-      <router-link v-if="isAuthenticated" to="/users/me">Account Settings</router-link>
+      <router-link :to="{ name: 'home' }">Home</router-link>
+      <router-link :to="{ name: 'todo-list' }">All Todos</router-link>
+      <router-link :to="{ name: 'create-todo' }">Create Todo</router-link>
+      <router-link v-if="isAuthenticated" :to="{ name: 'calendar' }">Calendar</router-link>
+      <router-link v-if="!isAuthenticated" :to="{ name: 'login' }">Login</router-link>
+      <router-link v-if="!isAuthenticated" :to="{ name: 'register' }">Register</router-link>
+      <router-link v-if="isAuthenticated" :to="{ name: 'user-account' }">Account Settings</router-link>
     </nav>
 
     <div class="welcome-section">
       <h1>Welcome to Your Todo Manager</h1>
-      <p v-if="isAuthenticated">Manage your tasks efficiently and track your progress!</p>
-      <p v-else>Please log in to track your todos and see statistics.</p>
+      <p v-if="isAuthenticated">
+        Manage tasks, keep your streak alive and review deadlines in calendar view.
+      </p>
+      <p v-else>Please log in to track your todos and see your statistics.</p>
     </div>
 
     <div v-if="isAuthenticated" class="stats-section">
       <h2>Your Statistics</h2>
-      <p>Current Streak: {{ user.current_streak }}</p>
-      <p>Longest Streak: {{ user.longest_streak }}</p>
-      <p>Pomodoro Sessions: {{ user.pomodoro_sessions }}</p>
-      <p>Tasks Completed: {{ user.tasks_completed }}</p>
+      <p>Current Streak: {{ user.current_streak ?? 0 }}</p>
+      <p>Longest Streak: {{ user.longest_streak ?? 0 }}</p>
+      <p>Pomodoro Sessions: {{ user.pomodoro_sessions ?? 0 }}</p>
+      <p>Tasks Completed: {{ user.tasks_completed ?? 0 }}</p>
     </div>
   </div>
 </template>
 
-<script>
-import {mapActions, mapGetters} from "vuex";
+<script setup>
+import { computed, onMounted } from "vue";
 
-export default {
-  computed: {
-    ...mapGetters(["isAuthenticated", "getUser"]),
-    user() {
-      return this.getUser || {};
-    }
-  },
-  methods: {
-    ...mapActions(["fetchUser"])
-  },
-  async mounted() {
-    await this.fetchUser();
-  }
-};
+import { useAuthStore } from "../store";
+
+const authStore = useAuthStore();
+
+const isAuthenticated = computed(() => authStore.isAuthenticated);
+const user = computed(() => authStore.user ?? {});
+
+onMounted(() => {
+  authStore.fetchUser();
+});
 </script>
 
-
 <style scoped>
-
 * {
   font-family: Andale Mono, monospace;
 }
@@ -63,6 +60,8 @@ export default {
 .nav-bar {
   display: flex;
   justify-content: space-around;
+  flex-wrap: wrap;
+  gap: 12px;
   padding: 12px;
   background: #007bff;
   border-radius: 6px;

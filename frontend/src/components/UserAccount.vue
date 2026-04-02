@@ -1,14 +1,13 @@
 <template>
   <div class="container">
     <nav class="nav-bar">
-      <router-link to="/">Home</router-link>
-      <br>
+      <router-link :to="{ name: 'home' }">Home</router-link>
       <button @click="logoutUser">Logout</button>
     </nav>
 
     <div class="account-section">
       <h1>Account Settings</h1>
-      <div v-if="user">
+      <div v-if="user.id">
         <p><strong>Username:</strong> {{ user.username }}</p>
         <p><strong>Email:</strong> {{ user.email }}</p>
         <p><strong>Current Streak:</strong> {{ user.current_streak }}</p>
@@ -18,11 +17,11 @@
       </div>
 
       <h2>Update Email</h2>
-      <input v-model="email" type="email" placeholder="New Email"/>
+      <input v-model="email" type="email" placeholder="New Email">
       <button @click="updateEmail">Update Email</button>
 
       <h2>Change Password</h2>
-      <input v-model="password" type="password" placeholder="New Password"/>
+      <input v-model="password" type="password" placeholder="New Password">
       <button @click="updatePassword">Update Password</button>
 
       <h2>Danger Zone</h2>
@@ -37,75 +36,64 @@
   </div>
 </template>
 
-<script>
-import {mapActions, mapGetters} from "vuex";
-import axios from "axios";
+<script setup>
+import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 
-export default {
-  data() {
-    return {
-      email: "",
-      password: "",
-      showDeletePopup: false,
-    };
-  },
-  computed: {
-    ...mapGetters(["getUser"]),
-    user() {
-      return this.getUser || {};
-    }
-  },
-  methods: {
-    ...mapActions(["fetchUser", "logout"]),
+import api from "../api/client";
+import { useAuthStore } from "../store";
 
-    async updateEmail() {
-      try {
-        await axios.put(`http://localhost:8000/users/${this.user.id}`, {email: this.email}, {
-          headers: {Authorization: `Bearer ${localStorage.getItem("token")}`}
-        });
-        alert("Email updated successfully");
-        await this.fetchUser();
-      } catch (error) {
-        console.error("Error updating email:", error);
-      }
-    },
+const authStore = useAuthStore();
+const router = useRouter();
 
-    async updatePassword() {
-      try {
-        await axios.put(`http://localhost:8000/users/${this.user.id}`, {password: this.password}, {
-          headers: {Authorization: `Bearer ${localStorage.getItem("token")}`}
-        });
-        alert("Password updated successfully");
-      } catch (error) {
-        console.error("Error updating password:", error);
-      }
-    },
+const email = ref("");
+const password = ref("");
+const showDeletePopup = ref(false);
 
-    async deleteAccount() {
-      try {
-        await axios.delete(`http://localhost:8000/users/${this.user.id}`, {
-          headers: {Authorization: `Bearer ${localStorage.getItem("token")}`}
-        });
-        this.logoutUser();
-      } catch (error) {
-        console.error("Error deleting account:", error);
-      }
-    },
+const user = computed(() => authStore.user ?? {});
 
-    logoutUser() {
-      this.logout();
-      this.$router.push("/login");
-    }
-  },
-  async mounted() {
-    await this.fetchUser();
+async function updateEmail() {
+  try {
+    await api.put(`/users/${user.value.id}`, { email: email.value });
+    email.value = "";
+    await authStore.fetchUser();
+  } catch (error) {
+    console.error("Не удалось обновить email:", error);
   }
-};
+}
+
+async function updatePassword() {
+  try {
+    await api.put(`/users/${user.value.id}`, { password: password.value });
+    password.value = "";
+  } catch (error) {
+    console.error("Не удалось обновить пароль:", error);
+  }
+}
+
+async function deleteAccount() {
+  try {
+    await api.delete(`/users/${user.value.id}`);
+    logoutUser();
+  } catch (error) {
+    console.error("Не удалось удалить аккаунт:", error);
+  }
+}
+
+function logoutUser() {
+  authStore.logout();
+  router.push({ name: "login" });
+}
+
+onMounted(async () => {
+  const profile = await authStore.fetchUser();
+  if (!profile) {
+    await router.push({ name: "login" });
+  }
+});
 </script>
 
-
 <style scoped>
-
 * {
   font-family: Andale Mono, monospace;
 }
@@ -149,7 +137,8 @@ export default {
   text-align: center;
 }
 
-h1, h2 {
+h1,
+h2 {
   font-size: 20px;
   margin-bottom: 15px;
 }

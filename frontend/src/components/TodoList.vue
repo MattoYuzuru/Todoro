@@ -3,9 +3,12 @@
     <div class="container">
       <h2>Your ToDos</h2>
       <ul v-if="todos.length" class="list-group mt-4">
-        <li v-for="todo in todos" :key="todo.id"
-            :class="['list-group-item', { 'completed-todo': todo.status === 'Completed' }]">
-          <router-link :to="'/todos/' + todo.id" class="todo-link">
+        <li
+          v-for="todo in todos"
+          :key="todo.id"
+          :class="['list-group-item', { 'completed-todo': todo.status === 'Completed' }]"
+        >
+          <router-link :to="{ name: 'todo-details', params: { id: todo.id } }" class="todo-link">
             <span class="todo-title">{{ todo.title }}</span><br>
             <span class="todo-description">{{ todo.description }}</span>
           </router-link>
@@ -22,90 +25,95 @@
           <button @click="nextPage" :disabled="todos.length < limit">Next</button>
         </div>
       </ul>
-      <p v-else class="no-todos">There are no todos yet.</p>
+      <p v-else class="no-todos">{{ loading ? "Loading..." : "There are no todos yet." }}</p>
     </div>
     <div class="create-button-container">
-      <router-link to="/todos/create">
-        <button class="all-button">📃 Add New Todo</button>
+      <router-link :to="{ name: 'create-todo' }">
+        <button class="all-button">Add New Todo</button>
       </router-link>
-      <router-link to="/">
+      <router-link :to="{ name: 'home' }">
         <button class="all-button">Home Page</button>
       </router-link>
     </div>
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { mapGetters } from 'vuex';
+<script setup>
+import { onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 
-export default {
-  data() {
-    return {
-      todos: [],
-      currentPage: 1,
-      limit: 10,
-    };
-  },
-  computed: {
-    ...mapGetters(['isAuthenticated']),
-    authToken() {
-      return localStorage.getItem('token');
-    }
-  },
-  async mounted() {
-    if (!this.authToken) {
-      this.$router.push('/login');
-      return;
-    }
-    await this.fetchTodos();
-  },
-  methods: {
-    async fetchTodos() {
-      try {
-        const skip = (this.currentPage - 1) * this.limit;
-        const response = await axios.get(`http://localhost:8000/todos/all/?skip=${skip}&limit=${this.limit}`, {
-          headers: {
-            Authorization: `Bearer ${this.authToken}`
-          }
-        });
-        this.todos = response.data;
-      } catch (error) {
-        console.error("Error fetching todos:", error);
-      }
-    },
-    async deleteTodo(todoId) {
-      try {
-        await axios.delete(`http://localhost:8000/todos/${todoId}`, {
-          headers: { Authorization: `Bearer ${this.authToken}` }
-        });
-        await this.fetchTodos();
-      } catch (error) {
-        console.error("Error deleting todo:", error);
-      }
-    },
-    async markCompleted(todoId) {
-      try {
-        await axios.post(`http://localhost:8000/todos/${todoId}/complete`, {}, {
-          headers: { Authorization: `Bearer ${this.authToken}` }
-        });
-        await this.fetchTodos();
-      } catch (error) {
-        console.error("Error marking todo as completed:", error);
-      }
-    },
-    nextPage() {
-      this.currentPage++;
-      this.fetchTodos();
-    },
-    prevPage() {
-      if (this.currentPage > 1) {
-        this.currentPage--;
-        this.fetchTodos();
-      }
-    }
+import api from "../api/client";
+import { useAuthStore } from "../store";
+
+const authStore = useAuthStore();
+const router = useRouter();
+
+const todos = ref([]);
+const currentPage = ref(1);
+const limit = 10;
+const loading = ref(false);
+
+async function ensureAuth() {
+  if (!authStore.isAuthenticated) {
+    await authStore.fetchUser();
   }
-};
+  if (!authStore.isAuthenticated) {
+    await router.push({ name: "login" });
+    return false;
+  }
+  return true;
+}
+
+async function fetchTodos() {
+  loading.value = true;
+  try {
+    const skip = (currentPage.value - 1) * limit;
+    const response = await api.get(`/todos/all/?skip=${skip}&limit=${limit}`);
+    todos.value = response.data;
+  } catch (error) {
+    console.error("Не удалось загрузить задачи:", error);
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function deleteTodo(todoId) {
+  try {
+    await api.delete(`/todos/${todoId}`);
+    await fetchTodos();
+  } catch (error) {
+    console.error("Не удалось удалить задачу:", error);
+  }
+}
+
+async function markCompleted(todoId) {
+  try {
+    await api.post(`/todos/${todoId}/complete`);
+    await authStore.fetchUser();
+    await fetchTodos();
+  } catch (error) {
+    console.error("Не удалось отметить задачу выполненной:", error);
+  }
+}
+
+async function nextPage() {
+  currentPage.value += 1;
+  await fetchTodos();
+}
+
+async function prevPage() {
+  if (currentPage.value > 1) {
+    currentPage.value -= 1;
+    await fetchTodos();
+  }
+}
+
+onMounted(async () => {
+  const canContinue = await ensureAuth();
+  if (canContinue) {
+    await fetchTodos();
+  }
+});
 </script>
 
 <style scoped>

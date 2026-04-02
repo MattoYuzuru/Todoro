@@ -3,16 +3,16 @@
     <h2>Create New Todo</h2>
     <form @submit.prevent="createTodo">
       <label>Title:</label>
-      <input v-model="todo.title" required/>
+      <input v-model="todo.title" required>
 
       <label>Description:</label>
-      <textarea v-model="todo.description" required></textarea>
+      <textarea v-model="todo.description" />
 
       <label>Status:</label>
       <select v-model="todo.status">
         <option value="Pending">Pending</option>
-        <option value="Postpone">Postpone</option>
-        <option value="In-progress">In Progress</option>
+        <option value="Postponed">Postponed</option>
+        <option value="In Progress">In Progress</option>
         <option value="Completed">Completed</option>
       </select>
 
@@ -24,72 +24,49 @@
       </select>
 
       <label>Due Date:</label>
-      <input type="date" v-model="todo.due_date"/>
-
-      <label>Pomodoro Sessions:</label>
-      <input type="number" v-model="todo.pomodoro_sessions" min="0"/>
-
-      <label>Total Time Spent (minutes):</label>
-      <input type="number" v-model="todo.total_time_spent" min="0"/>
-
-      <label>Current Streak (days):</label>
-      <input type="number" v-model="todo.current_streak" min="0"/>
+      <input type="date" v-model="todo.due_date">
 
       <button type="submit" class="submit-btn">Create Todo</button>
-      <router-link to="/">
+      <router-link :to="{ name: 'home' }">
         <button type="button" class="home-btn">Home Page</button>
       </router-link>
     </form>
   </div>
 </template>
 
-<script>
-import axios from "axios";
+<script setup>
+import { reactive } from "vue";
+import { useRouter } from "vue-router";
 
-export default {
-  data() {
-    return {
-      todo: {
-        title: "",
-        description: "",
-        status: "Pending",
-        priority: "Medium",
-        due_date: "",
-        pomodoro_sessions: 0,
-        total_time_spent: 0,
-        current_streak: 0,
-        longest_streak: 0,
-      },
-    };
-  },
-  computed: {
-    authToken() {
-      return localStorage.getItem("token");
-    },
-  },
-  async mounted() {
-    if (!this.authToken) {
-      this.$router.push("/login");
-    }
-  },
-  methods: {
-    async createTodo() {
-      try {
-        await axios.post("http://localhost:8000/todos/", this.todo, {
-          headers: {
-            Authorization: `Bearer ${this.authToken}`,
-          },
-        });
-        this.$router.push("/");
-      } catch (error) {
-        console.error(
-            "Error creating todo:",
-            error.response ? error.response.data : error
-        );
-      }
-    },
-  },
-};
+import api from "../api/client";
+import { useAuthStore } from "../store";
+
+const authStore = useAuthStore();
+const router = useRouter();
+
+const todo = reactive({
+  title: "",
+  description: "",
+  status: "Pending",
+  priority: "Medium",
+  due_date: "",
+});
+
+if (!authStore.isAuthenticated) {
+  router.push({ name: "login" });
+}
+
+async function createTodo() {
+  try {
+    await api.post("/todos/", {
+      ...todo,
+      due_date: todo.due_date || null,
+    });
+    await router.push({ name: "todo-list" });
+  } catch (error) {
+    console.error("Не удалось создать задачу:", error.response?.data ?? error);
+  }
+}
 </script>
 
 <style scoped>
