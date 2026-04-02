@@ -1,262 +1,126 @@
 <template>
-  <div>
-    <div class="container">
-      <h2>Your ToDos</h2>
-      <ul v-if="todos.length" class="list-group mt-4">
-        <li
-          v-for="todo in todos"
-          :key="todo.id"
-          :class="['list-group-item', { 'completed-todo': todo.status === 'Completed' }]"
-        >
-          <router-link :to="{ name: 'todo-details', params: { id: todo.id } }" class="todo-link">
-            <span class="todo-title">{{ todo.title }}</span><br>
-            <span class="todo-description">{{ todo.description }}</span>
-          </router-link>
-          <div class="button-group">
-            <button v-if="todo.status !== 'Completed'" @click="markCompleted(todo.id)" class="complete-btn">
-              Complete
-            </button>
-            <button @click="deleteTodo(todo.id)">Delete</button>
-          </div>
-        </li>
-        <div class="pagination">
-          <button @click="prevPage" :disabled="currentPage === 1">Previous</button>
-          <span>Page {{ currentPage }}</span>
-          <button @click="nextPage" :disabled="todos.length < limit">Next</button>
+  <section class="page-shell">
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Task radar</p>
+          <h1 style="margin: 0; font-size: 2.4rem; letter-spacing: -0.05em;">Все задачи на одной интерактивной сцене</h1>
         </div>
-      </ul>
-      <p v-else class="no-todos">{{ loading ? "Loading..." : "There are no todos yet." }}</p>
-    </div>
-    <div class="create-button-container">
-      <router-link :to="{ name: 'create-todo' }">
-        <button class="all-button">Add New Todo</button>
-      </router-link>
-      <router-link :to="{ name: 'home' }">
-        <button class="all-button">Home Page</button>
-      </router-link>
-    </div>
-  </div>
+        <RouterLink class="button button--accent" :to="{ name: 'create-todo' }">
+          Новая задача
+        </RouterLink>
+      </div>
+
+      <div class="filter-row">
+        <input v-model="search" class="field" type="search" placeholder="Поиск по названию или описанию">
+        <select v-model="statusFilter" class="select">
+          <option value="all">Все статусы</option>
+          <option value="Pending">В очереди</option>
+          <option value="In Progress">В работе</option>
+          <option value="Postponed">Отложена</option>
+          <option value="Completed">Завершена</option>
+        </select>
+        <select v-model="priorityFilter" class="select">
+          <option value="all">Все приоритеты</option>
+          <option value="Low">Низкий</option>
+          <option value="Medium">Средний</option>
+          <option value="High">Высокий</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="lane-grid">
+      <article v-for="lane in lanes" :key="lane.title" class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">{{ lane.caption }}</p>
+            <h2>{{ lane.title }}</h2>
+          </div>
+          <div class="pill-counter">
+            <span>{{ lane.items.length }}</span>
+            задач
+          </div>
+        </div>
+
+        <div v-if="lane.items.length" class="task-grid">
+          <TaskCard
+            v-for="todo in lane.items"
+            :key="todo.id"
+            :todo="todo"
+            compact
+          />
+        </div>
+        <div v-else class="empty-state">
+          <p>{{ lane.empty }}</p>
+        </div>
+      </article>
+    </section>
+  </section>
 </template>
 
 <script setup>
-import { onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
+import { computed, onMounted, ref } from "vue";
+import { RouterLink, useRouter } from "vue-router";
 
-import api from "../api/client";
-import { useAuthStore } from "../store";
+import TaskCard from "./TaskCard.vue";
+import { useAuthStore, useTimerStore, useTodoStore } from "../store";
 
 const authStore = useAuthStore();
+const todoStore = useTodoStore();
+const timerStore = useTimerStore();
 const router = useRouter();
 
-const todos = ref([]);
-const currentPage = ref(1);
-const limit = 10;
-const loading = ref(false);
+const search = ref("");
+const statusFilter = ref("all");
+const priorityFilter = ref("all");
 
-async function ensureAuth() {
-  if (!authStore.isAuthenticated) {
-    await authStore.fetchUser();
-  }
-  if (!authStore.isAuthenticated) {
-    await router.push({ name: "login" });
-    return false;
-  }
-  return true;
-}
+const filteredTodos = computed(() => {
+  const query = search.value.trim().toLowerCase();
 
-async function fetchTodos() {
-  loading.value = true;
-  try {
-    const skip = (currentPage.value - 1) * limit;
-    const response = await api.get(`/todos/all/?skip=${skip}&limit=${limit}`);
-    todos.value = response.data;
-  } catch (error) {
-    console.error("Не удалось загрузить задачи:", error);
-  } finally {
-    loading.value = false;
-  }
-}
+  return todoStore.sortedTodos.filter((todo) => {
+    const matchesQuery =
+      !query ||
+      todo.title.toLowerCase().includes(query) ||
+      (todo.description ?? "").toLowerCase().includes(query);
+    const matchesStatus = statusFilter.value === "all" || todo.status === statusFilter.value;
+    const matchesPriority = priorityFilter.value === "all" || todo.priority === priorityFilter.value;
 
-async function deleteTodo(todoId) {
-  try {
-    await api.delete(`/todos/${todoId}`);
-    await fetchTodos();
-  } catch (error) {
-    console.error("Не удалось удалить задачу:", error);
-  }
-}
+    return matchesQuery && matchesStatus && matchesPriority;
+  });
+});
 
-async function markCompleted(todoId) {
-  try {
-    await api.post(`/todos/${todoId}/complete`);
-    await authStore.fetchUser();
-    await fetchTodos();
-  } catch (error) {
-    console.error("Не удалось отметить задачу выполненной:", error);
-  }
-}
-
-async function nextPage() {
-  currentPage.value += 1;
-  await fetchTodos();
-}
-
-async function prevPage() {
-  if (currentPage.value > 1) {
-    currentPage.value -= 1;
-    await fetchTodos();
-  }
-}
+const lanes = computed(() => [
+  {
+    title: "В фокусе",
+    caption: "активный поток",
+    empty: "Нет задач в активной фазе. Запусти работу на любой карточке, и она окажется здесь.",
+    items: filteredTodos.value.filter((todo) => todo.status === "In Progress" || timerStore.getElapsedTime(todo.id) > 0),
+  },
+  {
+    title: "Открытые",
+    caption: "рабочая очередь",
+    empty: "Очередь пуста. Можно создать новую задачу или снять фильтры.",
+    items: filteredTodos.value.filter((todo) => ["Pending", "Postponed"].includes(todo.status) && timerStore.getElapsedTime(todo.id) === 0),
+  },
+  {
+    title: "Закрытые",
+    caption: "завершенный архив",
+    empty: "Здесь пока нет завершенных карточек.",
+    items: filteredTodos.value.filter((todo) => todo.status === "Completed"),
+  },
+]);
 
 onMounted(async () => {
-  const canContinue = await ensureAuth();
-  if (canContinue) {
-    await fetchTodos();
+  if (!authStore.isAuthenticated) {
+    await authStore.fetchUser();
   }
+
+  if (!authStore.isAuthenticated) {
+    await router.push({ name: "login" });
+    return;
+  }
+
+  const todos = await todoStore.fetchTodos({ force: true });
+  await timerStore.hydrateForTodos(todos);
 });
 </script>
-
-<style scoped>
-* {
-  font-family: Andale Mono, monospace;
-}
-
-.container {
-  max-width: 600px;
-  margin: auto;
-  padding: 20px;
-}
-
-.list-group {
-  list-style: none;
-  padding: 0;
-}
-
-.list-group-item {
-  display: flex;
-  flex-direction: column;
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
-  padding: 12px;
-  margin-bottom: 10px;
-  border-radius: 8px;
-  transition: background-color 0.2s ease-in-out;
-}
-
-.list-group-item:hover {
-  background-color: #f9f9f9;
-}
-
-.completed-todo {
-  border-color: #4caf50;
-  background-color: #e8f5e9;
-}
-
-.todo-link {
-  text-decoration: none;
-  color: #333;
-  flex-grow: 1;
-  font-weight: 500;
-}
-
-.todo-link:hover {
-  text-decoration: underline;
-}
-
-.todo-title {
-  font-size: 18px;
-  font-weight: bold;
-  color: #212121;
-}
-
-.todo-description {
-  font-size: 14px;
-  color: #666;
-  margin-top: 4px;
-}
-
-.button-group {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-button {
-  padding: 8px 14px;
-  border: none;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: all 0.2s ease-in-out;
-}
-
-.complete-btn {
-  background-color: #4caf50;
-  color: white;
-}
-
-.complete-btn:hover {
-  background-color: #388e3c;
-}
-
-button:nth-child(2) {
-  background-color: #f44336;
-  color: white;
-}
-
-button:nth-child(2):hover {
-  background-color: #d32f2f;
-}
-
-button:disabled {
-  background-color: #bdbdbd;
-  cursor: not-allowed;
-}
-
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-  margin-top: 20px;
-}
-
-.pagination button {
-  background-color: #007bff;
-  color: white;
-}
-
-.pagination button:hover {
-  background-color: #0056b3;
-}
-
-.create-button-container {
-  text-align: center;
-  margin-top: 20px;
-}
-
-.all-button {
-  margin: 2px;
-  display: inline-block;
-  padding: 10px 20px;
-  background-color: #4caf50;
-  color: white;
-  font-size: 16px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease-in-out;
-}
-
-.all-button:hover {
-  background-color: #388e3c;
-}
-
-.no-todos {
-  text-align: center;
-  margin-top: 20px;
-  font-size: 18px;
-  color: #757575;
-}
-</style>

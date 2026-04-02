@@ -15,16 +15,19 @@ const routes = [
     path: "/",
     name: "home",
     component: HomePage,
+    meta: { public: true },
   },
   {
     path: "/register",
     name: "register",
     component: UserRegister,
+    meta: { public: true },
   },
   {
     path: "/login",
     name: "login",
     component: UserLogin,
+    meta: { public: true },
   },
   {
     path: "/todos/create",

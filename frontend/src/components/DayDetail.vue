@@ -1,119 +1,70 @@
 <template>
-  <div class="day-detail">
-    <div class="header">
-      <router-link :to="{ name: 'calendar' }" class="back-btn">
-        &larr; Back to Calendar
-      </router-link>
-      <h1>{{ formattedDate }}</h1>
-    </div>
-
-    <div v-if="loading" class="panel">Loading...</div>
-
-    <div v-else-if="todos.length === 0" class="panel">
-      <p>No todos for this day.</p>
-      <router-link :to="{ name: 'create-todo' }" class="add-todo-btn">
-        Create Todo
-      </router-link>
-    </div>
-
-    <div v-else class="todo-list">
-      <article v-for="todo in todos" :key="todo.id" class="todo-item">
+  <section class="page-shell">
+    <section class="panel">
+      <div class="section-heading">
         <div>
-          <h3>{{ todo.title }}</h3>
-          <p>{{ todo.description || "No description" }}</p>
+          <p class="eyebrow">День целиком</p>
+          <h1 style="margin: 0; font-size: 2.4rem; letter-spacing: -0.05em;">{{ formattedDate }}</h1>
         </div>
-        <div class="todo-meta">
-          <span>{{ todo.priority || "No priority" }}</span>
-          <span>{{ todo.status }}</span>
-          <router-link :to="{ name: 'todo-details', params: { id: todo.id } }">Open</router-link>
-        </div>
-      </article>
-    </div>
-  </div>
+        <RouterLink class="button button--ghost" :to="{ name: 'calendar' }">
+          Назад к календарю
+        </RouterLink>
+      </div>
+
+      <div class="mini-stat">
+        <span>Найдено задач</span>
+        <strong>{{ todos.length }}</strong>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div v-if="todos.length" class="task-grid">
+        <TaskCard
+          v-for="todo in todos"
+          :key="todo.id"
+          :todo="todo"
+          compact
+        />
+      </div>
+      <div v-else class="empty-state">
+        <p>На этот день пока ничего не назначено.</p>
+        <RouterLink class="button button--accent" :to="{ name: 'create-todo' }">
+          Создать задачу
+        </RouterLink>
+      </div>
+    </section>
+  </section>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { computed, onMounted } from "vue";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 
-import api from "../api/client";
-import { useAuthStore } from "../store";
+import TaskCard from "./TaskCard.vue";
+import { useAuthStore, useTimerStore, useTodoStore } from "../store";
+import { formatDateLabel } from "../utils/formatters";
 
 const authStore = useAuthStore();
+const todoStore = useTodoStore();
+const timerStore = useTimerStore();
 const route = useRoute();
 const router = useRouter();
 
-const loading = ref(true);
-const todos = ref([]);
-
-const dateValue = computed(() => route.params.date);
-const formattedDate = computed(() => {
-  return new Date(`${dateValue.value}T00:00:00`).toLocaleDateString();
-});
-
-async function fetchTodos() {
-  try {
-    const response = await api.get("/todos/all/?skip=0&limit=100");
-    todos.value = response.data.filter((todo) => todo.due_date === dateValue.value);
-  } catch (error) {
-    console.error("Не удалось загрузить задачи за день:", error);
-  } finally {
-    loading.value = false;
-  }
-}
+const dateValue = computed(() => String(route.params.date));
+const formattedDate = computed(() => formatDateLabel(dateValue.value));
+const todos = computed(() => todoStore.sortedTodos.filter((todo) => todo.due_date === dateValue.value));
 
 onMounted(async () => {
   if (!authStore.isAuthenticated) {
     await authStore.fetchUser();
   }
+
   if (!authStore.isAuthenticated) {
     await router.push({ name: "login" });
     return;
   }
-  await fetchTodos();
+
+  const items = await todoStore.fetchTodos({ force: true });
+  await timerStore.hydrateForTodos(items);
 });
 </script>
-
-<style scoped>
-.day-detail {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 24px;
-}
-
-.header {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: center;
-  margin-bottom: 24px;
-}
-
-.back-btn,
-.add-todo-btn {
-  color: #0b7dda;
-  text-decoration: none;
-  font-weight: bold;
-}
-
-.panel,
-.todo-item {
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 12px;
-  padding: 16px;
-}
-
-.todo-list {
-  display: grid;
-  gap: 16px;
-}
-
-.todo-meta {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-}
-</style>

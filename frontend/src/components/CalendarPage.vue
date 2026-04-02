@@ -1,194 +1,113 @@
 <template>
-  <div class="calendar-container">
-    <div class="calendar-header">
-      <div>
-        <h1>Calendar</h1>
-        <p>Tasks are grouped by due date for the selected month.</p>
-      </div>
-      <input v-model="selectedMonth" type="month" class="month-picker">
-    </div>
-
-    <div v-if="groupedTodos.length" class="day-groups">
-      <article v-for="group in groupedTodos" :key="group.date" class="day-group">
-        <div class="group-header">
-          <div>
-            <h2>{{ formatDate(group.date) }}</h2>
-            <p>{{ group.items.length }} task(s)</p>
-          </div>
-          <router-link :to="{ name: 'calendar-day', params: { date: group.date } }" class="view-link">
-            Open day
-          </router-link>
+  <section class="page-shell">
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">План по срокам</p>
+          <h1 style="margin: 0; font-size: 2.4rem; letter-spacing: -0.05em;">Календарь, который показывает не только дату, но и плотность нагрузки</h1>
         </div>
+        <input v-model="selectedMonth" class="field" type="month" style="max-width: 220px;">
+      </div>
 
-        <ul>
-          <li v-for="todo in group.items" :key="todo.id">
-            <router-link :to="{ name: 'todo-details', params: { id: todo.id } }">
-              {{ todo.title }}
-            </router-link>
-            <span :class="['status-badge', todo.status.toLowerCase().replace(/\s+/g, '-')]">
-              {{ todo.status }}
+      <div class="mini-stat">
+        <span>Активный период</span>
+        <strong>{{ formatMonthLabel(selectedMonth) }}</strong>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Date clusters</p>
+          <h2>Собранные по дням точки напряжения</h2>
+        </div>
+      </div>
+
+      <div v-if="groupedTodos.length" class="calendar-grid">
+        <article v-for="group in groupedTodos" :key="group.date" class="calendar-day-card">
+          <div class="task-card__meta">
+            <span class="chip" :data-tone="group.isOverdue ? 'danger' : 'calm'">
+              {{ formatDateLabel(group.date) }}
             </span>
-          </li>
-        </ul>
-      </article>
-    </div>
+            <span class="chip" data-tone="muted">{{ group.items.length }} задач</span>
+          </div>
 
-    <div v-else class="empty-state">
-      <p>No tasks with due dates found for this month.</p>
-      <router-link :to="{ name: 'create-todo' }" class="view-link">Create task</router-link>
-    </div>
-  </div>
+          <h3>{{ group.headline }}</h3>
+          <p class="muted-copy">{{ group.summary }}</p>
+
+          <div class="form-grid">
+            <div
+              v-for="todo in group.items.slice(0, 3)"
+              :key="todo.id"
+              class="mini-stat"
+            >
+              <span>{{ todo.status }}</span>
+              <strong style="font-size: 1rem;">{{ todo.title }}</strong>
+            </div>
+          </div>
+
+          <RouterLink class="button button--ghost" :to="{ name: 'calendar-day', params: { date: group.date } }">
+            Открыть день
+          </RouterLink>
+        </article>
+      </div>
+      <div v-else class="empty-state">
+        <p>В выбранном месяце нет задач с дедлайнами. Можно создать новую карточку и сразу увидеть ее на таймлайне.</p>
+        <RouterLink class="button button--accent" :to="{ name: 'create-todo' }">
+          Создать задачу
+        </RouterLink>
+      </div>
+    </section>
+  </section>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
+import { RouterLink, useRouter } from "vue-router";
 
-import api from "../api/client";
-import { useAuthStore } from "../store";
+import { useAuthStore, useTimerStore, useTodoStore } from "../store";
+import { formatDateLabel, formatMonthLabel, isOverdue } from "../utils/formatters";
 
 const authStore = useAuthStore();
+const todoStore = useTodoStore();
+const timerStore = useTimerStore();
 const router = useRouter();
 
-const todos = ref([]);
 const selectedMonth = ref(new Date().toISOString().slice(0, 7));
 
 const groupedTodos = computed(() => {
   const groups = new Map();
 
-  todos.value
+  todoStore.sortedTodos
     .filter((todo) => todo.due_date && todo.due_date.startsWith(selectedMonth.value))
-    .sort((left, right) => left.due_date.localeCompare(right.due_date))
     .forEach((todo) => {
       const group = groups.get(todo.due_date) ?? [];
       group.push(todo);
       groups.set(todo.due_date, group);
     });
 
-  return Array.from(groups.entries()).map(([date, items]) => ({ date, items }));
+  return Array.from(groups.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([date, items]) => ({
+      date,
+      items,
+      isOverdue: isOverdue(date),
+      headline: items[0]?.title ?? "Пул задач",
+      summary: `${items.filter((todo) => todo.status !== "Completed").length} активных, ${items.filter((todo) => todo.status === "Completed").length} завершенных.`,
+    }));
 });
-
-function formatDate(value) {
-  return new Date(`${value}T00:00:00`).toLocaleDateString();
-}
-
-async function fetchTodos() {
-  try {
-    const response = await api.get("/todos/all/?skip=0&limit=100");
-    todos.value = response.data;
-  } catch (error) {
-    console.error("Не удалось загрузить календарные данные:", error);
-  }
-}
 
 onMounted(async () => {
   if (!authStore.isAuthenticated) {
     await authStore.fetchUser();
   }
+
   if (!authStore.isAuthenticated) {
     await router.push({ name: "login" });
     return;
   }
-  await fetchTodos();
+
+  const todos = await todoStore.fetchTodos({ force: true });
+  await timerStore.hydrateForTodos(todos);
 });
 </script>
-
-<style scoped>
-.calendar-container {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 24px;
-}
-
-.calendar-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: flex-start;
-  margin-bottom: 24px;
-}
-
-.month-picker {
-  padding: 10px 12px;
-  border: 1px solid #d0d7e2;
-  border-radius: 8px;
-}
-
-.day-groups {
-  display: grid;
-  gap: 16px;
-}
-
-.day-group {
-  background: #fff;
-  border-radius: 12px;
-  border: 1px solid #ddd;
-  padding: 16px;
-}
-
-.group-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.day-group ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.day-group li {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid #eee;
-}
-
-.day-group li:last-child {
-  border-bottom: 0;
-}
-
-.view-link {
-  display: inline-block;
-  padding: 8px 16px;
-  background-color: #2196f3;
-  color: white;
-  text-decoration: none;
-  border-radius: 4px;
-}
-
-.view-link:hover {
-  background-color: #0b7dda;
-}
-
-.status-badge {
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: bold;
-}
-
-.status-badge.pending,
-.status-badge.in-progress,
-.status-badge.postponed {
-  background: #eef4ff;
-  color: #255bb5;
-}
-
-.status-badge.completed {
-  background: #e8f5e9;
-  color: #2f7d32;
-}
-
-.empty-state {
-  background: #fff;
-  padding: 24px;
-  border-radius: 12px;
-  border: 1px solid #ddd;
-}
-</style>

@@ -1,39 +1,93 @@
 <template>
-  <div class="container">
-    <nav class="nav-bar">
-      <router-link :to="{ name: 'home' }">Home</router-link>
-      <button @click="logoutUser">Logout</button>
-    </nav>
+  <section class="page-shell">
+    <div class="account-grid">
+      <section class="panel account-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Профиль</p>
+            <h1 style="margin: 0; font-size: 2.5rem; letter-spacing: -0.05em;">{{ user.username }}</h1>
+          </div>
+          <button class="button button--ghost" @click="logoutUser">
+            Выйти
+          </button>
+        </div>
 
-    <div class="account-section">
-      <h1>Account Settings</h1>
-      <div v-if="user.id">
-        <p><strong>Username:</strong> {{ user.username }}</p>
-        <p><strong>Email:</strong> {{ user.email }}</p>
-        <p><strong>Current Streak:</strong> {{ user.current_streak }}</p>
-        <p><strong>Longest Streak:</strong> {{ user.longest_streak }}</p>
-        <p><strong>Pomodoro Sessions:</strong> {{ user.pomodoro_sessions }}</p>
-        <p><strong>Tasks Completed:</strong> {{ user.tasks_completed }}</p>
+        <p class="lead-text">
+          {{ user.email }}
+        </p>
+
+        <div class="stats-grid">
+          <article class="metric-card">
+            <span>Текущая серия</span>
+            <strong>{{ user.current_streak ?? 0 }}</strong>
+            <p>Текущий ритм активности по системе.</p>
+          </article>
+          <article class="metric-card">
+            <span>Лучшая серия</span>
+            <strong>{{ user.longest_streak ?? 0 }}</strong>
+            <p>Пиковая серия без разрыва темпа.</p>
+          </article>
+          <article class="metric-card">
+            <span>Pomodoro</span>
+            <strong>{{ user.pomodoro_sessions ?? 0 }}</strong>
+            <p>Сколько фокус-циклов уже закрыто.</p>
+          </article>
+          <article class="metric-card">
+            <span>Готовые задачи</span>
+            <strong>{{ user.tasks_completed ?? 0 }}</strong>
+            <p>Полезный результат, а не просто активность.</p>
+          </article>
+        </div>
+      </section>
+
+      <aside class="panel sticky-panel">
+        <div class="form-grid">
+          <div class="field-block">
+            <label for="email">Новый email</label>
+            <input id="email" v-model="email" class="field" type="email" placeholder="new@email.com">
+            <button class="button button--accent" @click="updateEmail">
+              Обновить email
+            </button>
+          </div>
+
+          <div class="field-block">
+            <label for="password">Новый пароль</label>
+            <input id="password" v-model="password" class="field" type="password" placeholder="••••••••">
+            <button class="button button--ghost" @click="updatePassword">
+              Сменить пароль
+            </button>
+          </div>
+
+          <div class="danger-card">
+            <p class="eyebrow">Опасная зона</p>
+            <h3 style="margin: 0 0 10px;">Удаление аккаунта</h3>
+            <p>Если удалить аккаунт, все задачи и твой текущий рабочий ритм исчезнут навсегда.</p>
+            <button class="button button--danger" @click="showDeletePopup = true">
+              Удалить аккаунт
+            </button>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <section v-if="showDeletePopup" class="panel danger-card">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Подтверждение</p>
+          <h2>Точно удалить аккаунт?</h2>
+        </div>
       </div>
-
-      <h2>Update Email</h2>
-      <input v-model="email" type="email" placeholder="New Email">
-      <button @click="updateEmail">Update Email</button>
-
-      <h2>Change Password</h2>
-      <input v-model="password" type="password" placeholder="New Password">
-      <button @click="updatePassword">Update Password</button>
-
-      <h2>Danger Zone</h2>
-      <button class="delete-button" @click="showDeletePopup = true">Delete Account</button>
-    </div>
-
-    <div v-if="showDeletePopup" class="popup">
-      <p>Are you sure you want to delete your account? This action is irreversible.</p>
-      <button @click="deleteAccount">Yes, Delete</button>
-      <button @click="showDeletePopup = false">Cancel</button>
-    </div>
-  </div>
+      <p>Это действие необратимо. После удаления придется создавать новый профиль и заново собирать свои задачи.</p>
+      <div class="inline-actions">
+        <button class="button button--danger" @click="deleteAccount">
+          Да, удалить
+        </button>
+        <button class="button button--ghost" @click="showDeletePopup = false">
+          Отмена
+        </button>
+      </div>
+    </section>
+  </section>
 </template>
 
 <script setup>
@@ -41,9 +95,11 @@ import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import api from "../api/client";
-import { useAuthStore } from "../store";
+import { useAuthStore, useTimerStore, useTodoStore } from "../store";
 
 const authStore = useAuthStore();
+const todoStore = useTodoStore();
+const timerStore = useTimerStore();
 const router = useRouter();
 
 const email = ref("");
@@ -82,6 +138,8 @@ async function deleteAccount() {
 
 function logoutUser() {
   authStore.logout();
+  todoStore.reset();
+  timerStore.reset();
   router.push({ name: "login" });
 }
 
@@ -92,128 +150,3 @@ onMounted(async () => {
   }
 });
 </script>
-
-<style scoped>
-* {
-  font-family: Andale Mono, monospace;
-}
-
-.container {
-  max-width: 600px;
-  margin: auto;
-  padding: 20px;
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-  border: 2px solid black;
-}
-
-.nav-bar {
-  display: flex;
-  justify-content: space-between;
-  padding: 10px;
-  background: #f8f9fa;
-  border-radius: 5px;
-  margin-bottom: 20px;
-}
-
-.nav-bar a,
-.nav-bar button {
-  text-decoration: none;
-  color: black;
-  font-weight: bold;
-  background: none;
-  border: none;
-  cursor: pointer;
-  transition: color 0.3s;
-}
-
-.nav-bar a:hover,
-.nav-bar button:hover {
-  color: #007bff;
-}
-
-.account-section {
-  text-align: center;
-}
-
-h1,
-h2 {
-  font-size: 20px;
-  margin-bottom: 15px;
-}
-
-.account-section p {
-  text-align: left;
-  margin: 5px 0;
-  font-size: 16px;
-}
-
-input {
-  width: 100%;
-  padding: 10px;
-  margin-top: 5px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  font-size: 16px;
-  box-sizing: border-box;
-}
-
-button {
-  width: 100%;
-  padding: 10px;
-  margin-top: 15px;
-  border: none;
-  border-radius: 5px;
-  font-size: 16px;
-  cursor: pointer;
-  transition: background 0.3s;
-  font-weight: bold;
-}
-
-button:hover {
-  opacity: 0.8;
-}
-
-button:not(.delete-button) {
-  background: #007bff;
-  color: white;
-}
-
-button:not(.delete-button):hover {
-  background: #0056b3;
-}
-
-.delete-button {
-  background: #dc3545;
-  color: white;
-}
-
-.delete-button:hover {
-  background: #b02a37;
-}
-
-.popup {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 300px;
-  padding: 20px;
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-  text-align: center;
-}
-
-.popup p {
-  margin-bottom: 15px;
-  font-size: 16px;
-}
-
-.popup button {
-  width: 48%;
-  margin: 3px;
-  display: inline-block;
-}
-</style>

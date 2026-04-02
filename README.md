@@ -1,13 +1,14 @@
-# Todoly
+# Todoro
 
-Небольшой full-stack todo-сервис на FastAPI и Vue 3. Приложение умеет:
+Todoro — это full-stack сервис для управления задачами, фокус-сессиями и личной продуктивностью.
 
-- регистрировать и авторизовывать пользователей по JWT;
-- создавать, редактировать и удалять задачи;
-- отмечать выполнение задач;
-- запускать Pomodoro по задаче с хранением состояния в Redis;
-- считать streak и базовую пользовательскую статистику;
-- показывать задачи по датам в календарном представлении.
+Что умеет проект:
+- регистрация и вход по JWT;
+- создание, редактирование, удаление и завершение задач;
+- Pomodoro-таймеры по задачам с хранением состояния в Redis;
+- календарное представление по дедлайнам;
+- дашборд со сводками, графиками и базовой аналитикой;
+- профиль пользователя со streak-метриками и настройками аккаунта.
 
 ## Стек
 
@@ -17,32 +18,39 @@
 
 ## Быстрый старт
 
-1. Скопируйте шаблоны окружения:
+1. Создай локальные env-файлы из шаблонов:
 
 ```bash
 cp .env.example .env
 cp .env_db.example .env_db
 ```
 
-2. Сгенерируйте `SECRET_KEY`:
+2. Сгенерируй новый `SECRET_KEY`:
 
 ```bash
 openssl rand -hex 32
 ```
 
-3. Поднимите проект:
+3. Запусти проект:
 
 ```bash
 docker compose up -d --build
 ```
 
-4. Откройте:
+4. Открой сервисы:
 
-- Frontend: `http://localhost:8080`
-- Backend API: `http://localhost:8000`
+- фронтенд: `http://localhost:8080`
+- backend API: `http://localhost:8000`
 - Swagger UI: `http://localhost:8000/docs`
 
-## Переменные окружения
+Если раньше уже поднимался старый Postgres volume с другими кредами, сбрось его один раз:
+
+```bash
+docker compose down -v
+docker compose up -d --build
+```
+
+## Основные переменные окружения
 
 `.env`:
 
@@ -50,7 +58,7 @@ docker compose up -d --build
 DATABASE_URL=postgresql+psycopg2://todo_user:change_me@postgres:5432/todo_db
 SECRET_KEY=replace_with_generated_secret
 ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=15
+ACCESS_TOKEN_EXPIRE_MINUTES=4320
 TIME_ZONE=Europe/Moscow
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080
 REDIS_HOST=redis
@@ -66,15 +74,18 @@ POSTGRES_PASSWORD=change_me
 POSTGRES_DB=todo_db
 ```
 
-## Что важно знать
+`ACCESS_TOKEN_EXPIRE_MINUTES=4320` — это 3 дня жизни JWT-токена.
 
-- Миграции Alembic применяются автоматически при старте backend-контейнера.
-- `.env` и `.env_db` не должны попадать в git; используйте только `.env.example` и `.env_db.example`.
-- Для локальной разработки без Docker backend читает настройки из переменных окружения или `.env`.
+## Как устроен запуск
 
-## Проверка качества
+- backend при старте ждет доступность базы данных;
+- затем автоматически применяет миграции Alembic;
+- после этого стартует Uvicorn;
+- frontend собирается через Vite и раздается контейнером на `8080`.
 
-Базовая проверка:
+## Проверка после изменений
+
+Базовый набор команд:
 
 ```bash
 docker compose up -d --build
@@ -82,3 +93,9 @@ docker compose exec -T backend pytest -q
 docker compose exec -T frontend npm run build
 docker compose down
 ```
+
+## Важно
+
+- `.env` и `.env_db` не должны попадать в Git.
+- Для репозитория используются `.env.example` и `.env_db.example`.
+- Если меняешь зависимости или Docker-образы, перепроверь `docker compose up -d --build`.

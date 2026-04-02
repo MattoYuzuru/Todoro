@@ -1,342 +1,297 @@
 <template>
-  <div class="todo-details">
-    <template v-if="todo">
-      <h2>{{ todo.title }}</h2>
-      <h4>{{ todo.description }}</h4>
+  <section v-if="todo" class="page-shell">
+    <div class="details-grid">
+      <section class="panel focus-stage">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Фокус-сцена</p>
+            <h1 style="margin: 0; font-size: 2.8rem; letter-spacing: -0.06em;">{{ todo.title }}</h1>
+          </div>
+          <div class="task-card__meta">
+            <span class="chip" :data-tone="statusTone">{{ getStatusLabel(todo.status) }}</span>
+            <span v-if="todo.priority" class="chip" data-tone="priority">{{ getPriorityLabel(todo.priority) }}</span>
+          </div>
+        </div>
 
-      <div class="todo-info">
-        <p><strong>Status:</strong> {{ todo.status }}</p>
-        <p><strong>Priority:</strong> {{ todo.priority || "Not set" }}</p>
-        <br>
-        <p v-if="todo.due_date"><strong>Due Date:</strong> {{ todo.due_date }}</p>
-        <p v-if="todo.completed_at"><strong>Completed At:</strong> {{ formattedCompletedAt }}</p>
-        <br>
-        <p><strong>Pomodoro Sessions:</strong> {{ todo.pomodoro_sessions }}</p>
-        <p><strong>Total Time Spent:</strong> {{ formattedTotalTime }}</p>
-        <p><strong>Current Streak:</strong> {{ todo.current_streak }} days</p>
-      </div>
+        <p class="lead-text" style="max-width: none;">
+          {{ todo.description || "Описание пока пустое. Можно дополнить справа и превратить карточку в полноценный сценарий работы." }}
+        </p>
 
-      <div class="timer">
-        <h3>Pomodoro Timer</h3>
-        <p class="timer-display">{{ formattedTime }}</p>
-        <button @click="startPomodoro" :disabled="isRunning" class="start-btn">Start</button>
-        <button @click="pausePomodoro" :disabled="!isRunning" class="pause-btn">Pause</button>
-        <button @click="finishPomodoro" :disabled="!isRunning" class="finish-btn">Finish</button>
-      </div>
+        <div class="timer-hero" style="margin-top: 24px;">
+          <div :class="['timer-orbit', { 'timer-orbit--running': timer?.isRunning }]" :style="orbitStyle">
+            <strong class="timer-hero__time">{{ formattedElapsed }}</strong>
+          </div>
 
-      <button v-if="todo.status !== 'Completed'" @click="markCompleted">Mark as Completed</button>
-      <button @click="deleteTodo">Delete</button>
-      <div class="navigation-buttons">
-        <router-link :to="{ name: 'home' }">
-          <button class="all-button">Go back to Menu</button>
-        </router-link>
-        <router-link :to="{ name: 'todo-list' }">
-          <button class="all-button">Go back to Todos</button>
-        </router-link>
-      </div>
-    </template>
+          <div class="task-card__meta">
+            <span class="chip" :data-tone="timer?.isRunning ? 'accent' : 'muted'">
+              {{ timer?.isRunning ? "Таймер идет" : "Таймер остановлен" }}
+            </span>
+            <span class="chip" :data-tone="todo.due_date && isOverdue(todo.due_date) ? 'danger' : 'calm'">
+              {{ formatDateLabel(todo.due_date) }}
+            </span>
+            <span class="chip" data-tone="muted">Всего {{ formatDuration(todo.total_time_spent) }}</span>
+          </div>
 
-    <p v-else>Loading task...</p>
-  </div>
+          <div class="inline-actions">
+            <button
+              class="button button--accent"
+              :disabled="timer?.isRunning || todo.status === 'Completed'"
+              @click="startTimer"
+            >
+              Старт
+            </button>
+            <button class="button button--ghost" :disabled="!timer?.isRunning" @click="pauseTimer">
+              Пауза
+            </button>
+            <button class="button button--secondary" :disabled="elapsedTime === 0" @click="finishTimer">
+              Завершить раунд
+            </button>
+          </div>
+        </div>
+
+        <div class="stats-grid" style="margin-top: 24px;">
+          <article class="metric-card">
+            <span>Pomodoro</span>
+            <strong>{{ todo.pomodoro_sessions }}</strong>
+            <p>Количество завершенных фокус-раундов.</p>
+          </article>
+          <article class="metric-card">
+            <span>Текущая серия</span>
+            <strong>{{ todo.current_streak }}</strong>
+            <p>Локальная серия активности по задаче.</p>
+          </article>
+          <article class="metric-card">
+            <span>Завершена</span>
+            <strong style="font-size: 1.4rem;">{{ formatDateTime(todo.completed_at) }}</strong>
+            <p>Время последнего закрытия задачи.</p>
+          </article>
+          <article class="metric-card">
+            <span>Обновлена</span>
+            <strong style="font-size: 1.4rem;">{{ formatDateTime(todo.updated_at) }}</strong>
+            <p>Когда карточка менялась в последний раз.</p>
+          </article>
+        </div>
+      </section>
+
+      <aside class="panel sticky-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Редактирование</p>
+            <h2>Правь контекст без ухода со сцены</h2>
+          </div>
+        </div>
+
+        <form class="form-grid" @submit.prevent="saveTodo">
+          <div class="field-block">
+            <label for="title">Заголовок</label>
+            <input id="title" v-model="draft.title" class="field" required>
+          </div>
+
+          <div class="field-block">
+            <label for="description">Описание</label>
+            <textarea id="description" v-model="draft.description" class="textarea" />
+          </div>
+
+          <div class="form-grid form-grid--two">
+            <div class="field-block">
+              <label for="status">Статус</label>
+              <select id="status" v-model="draft.status" class="select">
+                <option value="Pending">В очереди</option>
+                <option value="In Progress">В работе</option>
+                <option value="Postponed">Отложена</option>
+                <option value="Completed">Завершена</option>
+              </select>
+            </div>
+
+            <div class="field-block">
+              <label for="priority">Приоритет</label>
+              <select id="priority" v-model="draft.priority" class="select">
+                <option value="">Без приоритета</option>
+                <option value="Low">Низкий</option>
+                <option value="Medium">Средний</option>
+                <option value="High">Высокий</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field-block">
+            <label for="due-date">Дедлайн</label>
+            <input id="due-date" v-model="draft.due_date" class="field" type="date">
+          </div>
+
+          <div class="inline-actions">
+            <button class="button button--accent" type="submit">
+              Сохранить
+            </button>
+            <button
+              v-if="todo.status !== 'Completed'"
+              class="button button--secondary"
+              type="button"
+              @click="completeTodo"
+            >
+              Завершить задачу
+            </button>
+            <button class="button button--danger" type="button" @click="deleteTodo">
+              Удалить
+            </button>
+          </div>
+        </form>
+      </aside>
+    </div>
+  </section>
+
+  <section v-else class="page-shell">
+    <div class="panel empty-state">
+      <p>Загружаю карточку задачи...</p>
+    </div>
+  </section>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onMounted, reactive, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
-import api from "../api/client";
-import { useAuthStore } from "../store";
+import { useAuthStore, useTimerStore, useTodoStore } from "../store";
+import {
+  formatDateLabel,
+  formatDateTime,
+  formatDuration,
+  getPriorityLabel,
+  getStatusLabel,
+  isOverdue,
+} from "../utils/formatters";
 
 const authStore = useAuthStore();
+const todoStore = useTodoStore();
+const timerStore = useTimerStore();
 const route = useRoute();
 const router = useRouter();
 
-const todo = ref(null);
-const timeInSeconds = ref(0);
-const isRunning = ref(false);
-const accumulatedTime = ref(0);
-const startTime = ref(null);
-
-let timerInterval = null;
-let statusSyncInterval = null;
-
-const todoId = computed(() => route.params.id);
-const formattedTime = computed(() => {
-  const minutes = Math.floor(timeInSeconds.value / 60);
-  const seconds = timeInSeconds.value % 60;
-  return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
+const draft = reactive({
+  title: "",
+  description: "",
+  status: "Pending",
+  priority: "",
+  due_date: "",
 });
 
-const formattedTotalTime = computed(() => {
-  const total = todo.value?.total_time_spent ?? 0;
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
+const todoId = computed(() => Number(route.params.id));
+const todo = computed(() => todoStore.getTodoById(todoId.value));
+const timer = computed(() => timerStore.getTimer(todoId.value));
+const elapsedTime = computed(() => timerStore.getElapsedTime(todoId.value));
+const formattedElapsed = computed(() => formatDuration(elapsedTime.value));
+const orbitProgress = computed(() => Math.min(elapsedTime.value / 1500, 1));
+const orbitStyle = computed(() => ({
+  "--progress": orbitProgress.value,
+  "--progress-angle": `${orbitProgress.value * 360}deg`,
+}));
+const statusTone = computed(() => {
+  if (todo.value?.status === "Completed") {
+    return "success";
+  }
+  if (todo.value?.status === "In Progress") {
+    return "accent";
+  }
+  if (todo.value?.status === "Postponed") {
+    return "danger";
+  }
+
+  return "muted";
 });
 
-const formattedCompletedAt = computed(() => {
-  return todo.value?.completed_at ? todo.value.completed_at.split("T")[0] : "N/A";
-});
-
-function clearTimers() {
-  if (timerInterval) {
-    window.clearInterval(timerInterval);
-    timerInterval = null;
-  }
-  if (statusSyncInterval) {
-    window.clearInterval(statusSyncInterval);
-    statusSyncInterval = null;
-  }
-}
-
-function startLocalTimer() {
-  if (!startTime.value) {
-    startTime.value = new Date(Date.now() - accumulatedTime.value * 1000);
-  }
-
-  if (timerInterval) {
-    window.clearInterval(timerInterval);
-  }
-
-  timerInterval = window.setInterval(() => {
-    const elapsed = Math.floor((Date.now() - startTime.value.getTime()) / 1000);
-    timeInSeconds.value = accumulatedTime.value + elapsed;
-    if (timeInSeconds.value >= 1500) {
-      finishPomodoro();
+watch(
+  todo,
+  (value) => {
+    if (!value) {
+      return;
     }
-  }, 1000);
+
+    draft.title = value.title;
+    draft.description = value.description ?? "";
+    draft.status = value.status;
+    draft.priority = value.priority ?? "";
+    draft.due_date = value.due_date ?? "";
+    timerStore.attachTodo(value);
+  },
+  { immediate: true }
+);
+
+async function loadTodo() {
+  await todoStore.fetchTodo(todoId.value);
+  await timerStore.syncStatus(todoId.value);
 }
 
-async function ensureAuth() {
-  if (!authStore.isAuthenticated) {
+async function saveTodo() {
+  try {
+    const updatedTodo = await todoStore.updateTodo(todoId.value, {
+      ...draft,
+      priority: draft.priority || null,
+      due_date: draft.due_date || null,
+    });
+
+    timerStore.attachTodo(updatedTodo);
+  } catch (error) {
+    console.error("Не удалось сохранить задачу:", error);
+  }
+}
+
+async function startTimer() {
+  try {
+    await timerStore.startTimer(todo.value);
+  } catch (error) {
+    console.error("Не удалось запустить таймер:", error);
+  }
+}
+
+async function pauseTimer() {
+  try {
+    await timerStore.pauseTimer(todoId.value);
+  } catch (error) {
+    console.error("Не удалось поставить таймер на паузу:", error);
+  }
+}
+
+async function finishTimer() {
+  try {
+    await timerStore.finishTimer(todoId.value);
+    await loadTodo();
+  } catch (error) {
+    console.error("Не удалось завершить раунд:", error);
+  }
+}
+
+async function completeTodo() {
+  try {
+    const updatedTodo = await todoStore.completeTodo(todoId.value);
+    timerStore.attachTodo(updatedTodo);
     await authStore.fetchUser();
-  }
-  if (!authStore.isAuthenticated) {
-    await router.push({ name: "login" });
-    return false;
-  }
-  return true;
-}
-
-async function fetchTodo() {
-  try {
-    const response = await api.get(`/todos/${todoId.value}`);
-    todo.value = response.data;
   } catch (error) {
-    console.error("Не удалось загрузить задачу:", error);
-  }
-}
-
-async function fetchPomodoroTime() {
-  try {
-    const response = await api.get(`/todos/${todoId.value}/pomodoro/status`);
-    timeInSeconds.value = response.data.elapsed_time;
-    isRunning.value = response.data.is_running;
-    accumulatedTime.value = response.data.accumulated_time ?? 0;
-    startTime.value = response.data.started_at ? new Date(response.data.started_at) : null;
-
-    if (isRunning.value) {
-      startLocalTimer();
-    } else if (timerInterval) {
-      window.clearInterval(timerInterval);
-      timerInterval = null;
-    }
-  } catch (error) {
-    console.error("Не удалось получить состояние помидора:", error);
+    console.error("Не удалось завершить задачу:", error);
   }
 }
 
 async function deleteTodo() {
   try {
-    await api.delete(`/todos/${todoId.value}`);
+    if (elapsedTime.value > 0 || timer.value?.isRunning) {
+      timerStore.archiveDeletedTimer(todo.value);
+    }
+    await todoStore.deleteTodo(todoId.value);
     await router.push({ name: "todo-list" });
   } catch (error) {
     console.error("Не удалось удалить задачу:", error);
   }
 }
 
-async function markCompleted() {
-  try {
-    await api.post(`/todos/${todoId.value}/complete`);
-    await authStore.fetchUser();
-    await fetchTodo();
-  } catch (error) {
-    console.error("Не удалось завершить задачу:", error);
-  }
-}
-
-async function startPomodoro() {
-  try {
-    const response = await api.post(`/todos/${todoId.value}/pomodoro/start`);
-    isRunning.value = true;
-    startTime.value = new Date(response.data.start_time);
-    accumulatedTime.value = response.data.accumulated_time ?? 0;
-    timeInSeconds.value = accumulatedTime.value;
-    startLocalTimer();
-  } catch (error) {
-    console.error("Не удалось запустить помидор:", error);
-  }
-}
-
-async function pausePomodoro() {
-  try {
-    const response = await api.post(`/todos/${todoId.value}/pomodoro/pause`);
-    isRunning.value = false;
-    accumulatedTime.value = response.data.elapsed_time;
-    timeInSeconds.value = response.data.elapsed_time;
-    startTime.value = null;
-    if (timerInterval) {
-      window.clearInterval(timerInterval);
-      timerInterval = null;
-    }
-    await fetchTodo();
-  } catch (error) {
-    console.error("Не удалось поставить помидор на паузу:", error);
-  }
-}
-
-async function finishPomodoro() {
-  try {
-    await api.post(`/todos/${todoId.value}/pomodoro/finish`);
-    isRunning.value = false;
-    accumulatedTime.value = 0;
-    timeInSeconds.value = 0;
-    startTime.value = null;
-    if (timerInterval) {
-      window.clearInterval(timerInterval);
-      timerInterval = null;
-    }
-    await authStore.fetchUser();
-    await fetchTodo();
-  } catch (error) {
-    console.error("Не удалось завершить помидор:", error);
-  }
-}
-
 onMounted(async () => {
-  const canContinue = await ensureAuth();
-  if (!canContinue) {
+  if (!authStore.isAuthenticated) {
+    await authStore.fetchUser();
+  }
+
+  if (!authStore.isAuthenticated) {
+    await router.push({ name: "login" });
     return;
   }
 
-  await fetchTodo();
-  await fetchPomodoroTime();
-  statusSyncInterval = window.setInterval(fetchPomodoroTime, 30000);
-});
-
-onBeforeUnmount(() => {
-  clearTimers();
+  await loadTodo();
 });
 </script>
-
-<style scoped>
-* {
-  font-family: Andale Mono, monospace;
-}
-
-.todo-details {
-  max-width: 600px;
-  margin: auto;
-  padding: 24px;
-  background: #ffffff;
-  border-radius: 10px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border: 2px solid #ddd;
-}
-
-h2 {
-  text-align: center;
-  margin-bottom: 10px;
-}
-
-.todo-info {
-  margin: 15px 0;
-  font-size: 16px;
-}
-
-.todo-info p {
-  margin: 6px 0;
-  color: #333;
-}
-
-.timer {
-  text-align: center;
-  margin-top: 20px;
-}
-
-.timer-display {
-  font-size: 24px;
-  font-weight: bold;
-  color: #222;
-  margin: 10px 0;
-}
-
-button {
-  display: block;
-  width: 100%;
-  padding: 12px;
-  margin-top: 12px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 16px;
-  transition: background 0.3s ease-in-out;
-}
-
-button:disabled {
-  background: #b9b9b9;
-  cursor: not-allowed;
-}
-
-.start-btn {
-  background: #28a745;
-  color: white;
-}
-
-.start-btn:hover {
-  background: #218838;
-}
-
-.pause-btn {
-  background: #ffc107;
-  color: black;
-}
-
-.pause-btn:hover {
-  background: #e0a800;
-}
-
-.finish-btn {
-  background: #dc3545;
-  color: white;
-}
-
-.finish-btn:hover {
-  background: #c82333;
-}
-
-.navigation-buttons {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 20px;
-  gap: 12px;
-}
-
-.all-button {
-  display: inline-block;
-  padding: 10px 20px;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  font-size: 16px;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-  text-align: center;
-}
-
-.all-button:hover {
-  background-color: #0056b3;
-}
-</style>
