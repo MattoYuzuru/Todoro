@@ -1,174 +1,84 @@
-# University To-Do App
+# Todoly
 
-A lightweight and intuitive **task management application** designed for university students to boost productivity.
+Небольшой full-stack todo-сервис на FastAPI и Vue 3. Приложение умеет:
 
-## Features
+- регистрировать и авторизовывать пользователей по JWT;
+- создавать, редактировать и удалять задачи;
+- отмечать выполнение задач;
+- запускать Pomodoro по задаче с хранением состояния в Redis;
+- считать streak и базовую пользовательскую статистику;
+- показывать задачи по датам в календарном представлении.
 
-_What I want/ed to implement to my app_
+## Стек
 
-1. Task management with categories and priorities.
-2. Calendar integration.
-3. Pomodoro timer in each todo task.
-5. Collaboration for projects.
-6. Visual statistics.
-7. Streak tracking.
-8. Friendly design.
+- Backend: FastAPI, SQLAlchemy, Alembic, Redis
+- Frontend: Vue 3, Vue Router, Pinia, Vite
+- Infrastructure: Docker Compose, PostgreSQL
 
-## Project Structure
+## Быстрый старт
 
-```
-todo_fastapi
-├───.env
-├───.env_db
-├───.gitignore
-├───LICENCE
-├───README.md
-├───alembic.ini
-├───backend
-│   ├───Dockerfile
-│   ├───alembic
-│   │   ├───README
-│   │   ├───env.py
-│   │   ├───script.py.mako
-│   │   └───versions
-│   │       ├───79fbd9de33e5_add_total_time_spent_cur_streak_to_todo_.py
-│   │       └───d73804355bae_initial_migration.py
-│   ├───app
-│   │   ├───__init__.py
-│   │   ├───auth.py
-│   │   ├───config.py
-│   │   ├───crud
-│   │   │   ├───__init__.py
-│   │   │   ├───todo_crud.py
-│   │   │   └───user_crud.py
-│   │   ├───db
-│   │   │   ├───__init__.py
-│   │   │   └───session.py
-│   │   ├───main.py
-│   │   ├───models
-│   │   │   ├───__init__.py
-│   │   │   ├───base.py
-│   │   │   ├───todo_item.py
-│   │   │   └───user.py
-│   │   ├───routes
-│   │   │   ├───__init__.py
-│   │   │   ├───todo_router.py
-│   │   │   └───user_router.py
-│   │   └───schemas
-│   │       ├───__init__.py
-│   │       ├───todo_schemas.py
-│   │       ├───token_schemas.py
-│   │       └───user_schemas.py
-│   ├───requirements.txt
-│   └───tests
-│       ├───__init__.py
-│       └───test_todo.py
-├───docker-compose.yml
-└───frontend
-    ├───Dockerfile
-    ├───babel.config.js
-    ├───jsconfig.json
-    ├───package-lock.json
-    ├───package.json
-    ├───public
-    │   └───favicon.ico
-    ├───src
-    │   ├───App.vue
-    │   ├───assets
-    │   │   └───custom.css
-    │   ├───components
-    │   │   ├───AddTodo.vue
-    │   │   ├───HomePage.vue
-    │   │   ├───TodoDetails.vue
-    │   │   ├───TodoList.vue
-    │   │   ├───UserLogin.vue
-    │   │   └───UserRegister.vue
-    │   ├───main.js
-    │   ├───router
-    │   │   └───index.js
-    │   └───store
-    │       └───index.js
-    └───vue.config.js
-```
-
-## Tech Stack
-
-Backend:
-
-* FastAPI
-
-DB, ORM, migrations management:
-
-* PostgreSQL
-* Alchemy
-* Alembic
-
-Frontend:
-
-* Vue.js
-
-Deployment:
-
-* Docker
-* Nginx
-
-etc
-
-
-# Getting Started
-To get a local copy up and running, follow these steps.
-
-
-#### Clone the repository:
+1. Скопируйте шаблоны окружения:
 
 ```bash
-
-git clone https://github.com/MattoYuzuru/todo_fastapi.git
-cd todo_fastapi
+cp .env.example .env
+cp .env_db.example .env_db
 ```
 
-#### Configure all .env files
-
-Run this command and copy the secret key
-
-
-It's for User Authentication (SECRET_KEY in .env)
+2. Сгенерируйте `SECRET_KEY`:
 
 ```bash
-
 openssl rand -hex 32
 ```
 
-There are 2 .env in my project.
-
-1) .env (for all config variables)
-
-```
-DATABASE_URL=postgresql+psycopg2://username:password@localhost:port/db_name
-SECRET_KEY=your_key
-ALGORITHM=HS256
-```
-
-2) .env_db (to run postrgesql via its docker image)
-
-```
-POSTGRES_USER=username
-POSTGRES_PASSWORD=password
-POSTGRES_DB=db_name
-```
-
-
-#### Run docker-compose to start Todo App
+3. Поднимите проект:
 
 ```bash
-
 docker compose up -d --build
 ```
 
+4. Откройте:
 
-#### Access Site
-http://localhost:8080/register
+- Frontend: `http://localhost:8080`
+- Backend API: `http://localhost:8000`
+- Swagger UI: `http://localhost:8000/docs`
 
-## Contributing
+## Переменные окружения
 
-Contributions are welcome! This is my first time using these technologies.
+`.env`:
+
+```env
+DATABASE_URL=postgresql+psycopg2://todo_user:change_me@postgres:5432/todo_db
+SECRET_KEY=replace_with_generated_secret
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=15
+TIME_ZONE=Europe/Moscow
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080
+REDIS_HOST=redis
+REDIS_PORT=6379
+VITE_API_BASE_URL=http://localhost:8000
+```
+
+`.env_db`:
+
+```env
+POSTGRES_USER=todo_user
+POSTGRES_PASSWORD=change_me
+POSTGRES_DB=todo_db
+```
+
+## Что важно знать
+
+- Миграции Alembic применяются автоматически при старте backend-контейнера.
+- `.env` и `.env_db` не должны попадать в git; используйте только `.env.example` и `.env_db.example`.
+- Для локальной разработки без Docker backend читает настройки из переменных окружения или `.env`.
+
+## Проверка качества
+
+Базовая проверка:
+
+```bash
+docker compose up -d --build
+docker compose exec -T backend pytest -q
+docker compose exec -T frontend npm run build
+docker compose down
+```
