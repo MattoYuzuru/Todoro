@@ -8,12 +8,8 @@ from ..auth import create_access_token
 from ..crud.user_crud import (
     authenticate_user,
     create_user,
+    get_current_user,
     get_user_by_id,
-    get_user_by_username,
-    get_current_user
-)
-from ..crud.user_crud import (
-    get_all_users,
     update_user,
     delete_user,
 )
@@ -43,15 +39,20 @@ def login_for_access_token(
 
 @router.post("/create", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_new_user(user_data: UserCreate, db: Session = Depends(get_db)):
-    db_user = get_user_by_username(db, user_data.username)
-    if db_user:
-        raise HTTPException(status_code=400, detail="This username already exists")
-    user = create_user(db, user_data)
-    return user
+    try:
+        return create_user(db, user_data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/users/{user_id}", response_model=UserResponse)
-def read_user(user_id: int, db: Session = Depends(get_db)):
+def read_user(
+        user_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    if user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to view this user")
     user = get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -59,9 +60,8 @@ def read_user(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/users/", response_model=List[UserResponse])
-def read_users(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    users = get_all_users(db, skip, limit)
-    return users
+def read_users(current_user: User = Depends(get_current_user)):
+    return [current_user]
 
 
 @router.get("/users/me/", response_model=UserResponse)
@@ -74,10 +74,13 @@ def update_existing_user(user_id: int, user_data: UserUpdate, db: Session = Depe
                          current_user: User = Depends(get_current_user)):
     if user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to update this user")
-    user = update_user(db, user_id, user_data)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
+    try:
+        user = update_user(db, user_id, user_data)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return user
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.delete("/users/{user_id}", response_model=UserResponse)

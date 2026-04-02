@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Date, TIMESTAMP, func, ForeignKey, ARRAY
+from sqlalchemy import ARRAY, TIMESTAMP, Column, Date, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import relationship
 
 from .base import Base
@@ -13,8 +13,8 @@ class TodoItem(Base):
     description = Column(Text, nullable=True)
     status = Column(String(20), nullable=False, default="Pending")
     priority = Column(String(10), nullable=True)
-    due_date = Column(Date, nullable=True)  # fix due date so it had hours, minutes, seconds
-    collaborators = Column(ARRAY(Integer), default=[])
+    due_date = Column(Date, nullable=True)
+    collaborators = Column(ARRAY(Integer), default=list)
     completed_at = Column(TIMESTAMP, nullable=True)
     pomodoro_sessions = Column(Integer, default=0)
     total_time_spent = Column(Integer, default=0)

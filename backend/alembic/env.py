@@ -4,14 +4,20 @@ from alembic import context
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
-from backend.app.config import DATABASE_URL
-from backend.app.models.base import Base
+try:
+    from app.config import settings
+    from app.models import TodoItem, User
+    from app.models.base import Base
+except ImportError:
+    from backend.app.config import settings
+    from backend.app.models import TodoItem, User
+    from backend.app.models.base import Base
 
 config = context.config
 
 fileConfig(config.config_file_name)
 
-config.set_main_option('sqlalchemy.url', DATABASE_URL)
+config.set_main_option('sqlalchemy.url', settings.database_url)
 
 target_metadata = Base.metadata
 

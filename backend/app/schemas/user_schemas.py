@@ -1,12 +1,15 @@
 from datetime import datetime, date
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class UserBase(BaseModel):
     username: str = Field(..., max_length=50)
     email: EmailStr
+
+
+class UserStats(BaseModel):
     current_streak: int = 0
     longest_streak: int = 0
     last_activity_date: Optional[date] = None
@@ -24,16 +27,9 @@ class UserUpdate(BaseModel):
     password: Optional[str] = Field(None, min_length=6, max_length=128)
 
 
-class UserStats(BaseModel):
-    current_streak: int
-    longest_streak: int
-    pomodoro_sessions: int
-    tasks_completed: int
-
-
-class UserResponse(UserBase):
+class UserResponse(UserBase, UserStats):
     id: int
     created_at: datetime
     updated_at: datetime
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
